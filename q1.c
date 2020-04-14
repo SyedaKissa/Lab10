@@ -14,6 +14,7 @@ struct buffer{
 buffer* b1 = NULL;
 sem_t* sem1; 
 sem_t* sem2;
+sem_t* mutex;
 
 int main(){
 
@@ -90,8 +91,75 @@ int main(){
 
 
 
+    //Shared mem for mutex created 
+    int shmid_mutex = shmget(141414, 1024, 0644|IPC_CREAT); 
+    printf("Shmid_mutex : %d\n", shmid_mutex);
+
+    if (shmid_mutex < 0){
+        perror("Shared memory not created successfully\n");
+        exit(0);
+    }
+
+    mutex = (sem_t*) shmat(shmid_mutex, NULL, 0);
+
+    if (mutex < 0){
+        perror("Shared memory not attached successfully\n");
+        exit(0);
+    } 
+
+    sem_open("mutex",O_CREAT|O_EXCL, 0644, 1);
+    sem_unlink("mutex");
+    printf("Shared mem for mutex created\n");
 
 
+
+    //Creating threads
+    pthread_t tid1, tid2;
+
+    int check = pthread_create(&tid1, NULL, Producer, &N);
+    if (check < 0){
+    	printf("Thread not created\n");
+    	exit(0);
+    }
+
+    check = pthread_create(&tid2, NULL, Cunsumer, &N);
+    if (check < 0){
+    	printf("Thread not created\n");
+    	exit(0);
+    }
+
+    sleep(2);
+
+
+    // Joining threads
+    check = pthread_join(tid1, NULL);
+    if (check < 0){
+    	printf("Thread not joined\n");
+    	exit(0);
+    }
+
+    check = pthread_join(tid2, NULL);
+    if (check < 0){
+    	printf("Thread not joined\n");
+    	exit(0);
+    }
+
+    //Deleting shared mem
+    shmdt(b1);
+    shmdt(sem1);
+    shmdt(sem2);
+    shmdt(mutex);
+
+  	shmctl(shmid_buffer, IPC_RMID, 0);  	
+  	shmctl(shmid_sem1, IPC_RMID, 0);  	
+  	shmctl(shmid_sem2, IPC_RMID, 0);
+  	shmctl(shmid_mutex, IPC_RMID, 0);
+
+  	sem_destroy(sem1);
+    sem_destroy(sem2);
+    sem_destroy(mutex);
+
+    printf("Done all\n");
 
 	return 0;
 }
