@@ -8,13 +8,73 @@
 
 struct buffer{
 	int size;
-    char mem[size]; 
+    char* mem; 
 };
 
-buffer* b1 = NULL;
-sem_t* sem1; 
-sem_t* sem2;
+struct buffer* b1 = NULL;
+sem_t* sem1; //slots empty
+sem_t* sem2; //slots full
 sem_t* mutex;
+
+void* Producer(void* avg){
+	printf("In Producer\n");
+
+	int N = *((int*)avg);
+	printf("N in producer: %d\n", N);
+	b1->size = N;
+	printf("b1->size: %d\n", b1->size);
+	b1->mem = (char*) malloc(b1->size *sizeof(char));
+
+	//Not allow cunsumer to use buffer
+	sem_wait(mutex);
+	//printf("before for\n");
+
+	int i;
+	for (i = 0; i < N; i++){
+		//printf("in for\n");
+
+		//Producer to be used first so wait for sem1 - empty slots	
+	    sem_wait(sem1);//1 slot to be used now so N-i slots empty
+
+	    //place in buffer
+	    b1->mem[i] = '1';
+	    //printf("after the prob statement\n");
+
+        sem_post(sem2);//1 slot is taken now so 1+i slots full 
+	}
+	printf("Buffer after the for loop producer:%s\n", b1->mem);
+	sem_post(mutex);
+
+	pthread_exit(0);
+}
+
+void* Consumer(void* avg){
+	printf("In Consumer\n");
+
+	int N = *((int*)avg);
+	printf("N in consumer: %d\n", N);
+	b1->size = N;
+	printf("b1->size: %d\n", b1->size);
+
+	//Not allow producer to use buffer
+	sem_wait(mutex);
+
+	int i = 0;
+	for (i = 0; i < N; i++){
+
+		//Consumer to free slots now so full slots sem decrement	
+	    sem_wait(sem2);//1 slot to be freed
+
+	    //display from the buffer
+	    printf("%c", b1->mem[i]);
+
+        sem_post(sem1);//1 slot is taken now so 1+i slots full 
+	}
+	printf("Buffer after the for loop in consumer:%s\n", b1->mem);
+	sem_post(mutex);
+
+	pthread_exit(0);
+}
 
 int main(){
 
@@ -27,7 +87,7 @@ int main(){
         exit(0);
     }
 
-    b1 = (buffer*) shmat(shmid_buffer, NULL, 0);
+    b1 = (struct buffer*) shmat(shmid_buffer, NULL, 0);
 
     if (b1 < 0){
         perror("Shared memory not attached successfully\n");
@@ -121,14 +181,17 @@ int main(){
     	printf("Thread not created\n");
     	exit(0);
     }
+    sleep(1);
 
-    check = pthread_create(&tid2, NULL, Cunsumer, &N);
+    check = pthread_create(&tid2, NULL, Consumer, &N);
     if (check < 0){
     	printf("Thread not created\n");
     	exit(0);
     }
 
-    sleep(2);
+
+
+    
 
 
     // Joining threads
@@ -143,6 +206,10 @@ int main(){
     	printf("Thread not joined\n");
     	exit(0);
     }
+
+
+
+
 
     //Deleting shared mem
     shmdt(b1);
